@@ -9,6 +9,14 @@ const mongoose = require('mongoose');
 const logger = require('morgan');
 const path = require('path');
 
+//AUTH
+const session = require('express-session');
+const bcrypt = require('bcrypt');
+const passport = require('passport');
+const LocalStrategy = require('passport-local');
+const User = require('./models/User.model');
+const flash = require('connect-flash');
+
 mongoose
   .connect('mongodb://localhost/passport-roles', {
     useNewUrlParser: true,
@@ -37,8 +45,55 @@ app.use(express.static(path.join(__dirname, 'public')));
 app.use(favicon(path.join(__dirname, 'public', 'images', 'favicon.ico')));
 
 // default value for title local
-app.locals.title = 'Express - Generated with IronGenerator';
+app.locals.title = 'Ironhack Bureau Investigation';
 
+//PASSPORT
+app.use(session({
+  secret: "GreatLab",
+  resave: true,
+  saveUninitialized: true,
+}));
+
+passport.serializeUser((user, cb) => {
+  cb(null, user._id);
+});
+
+passport.deserializeUser((id, cb) => {
+  User.findById(id, (err, user) => {
+    if (err) { return cb(err); }
+    cb(null, user);
+  });
+});
+
+//FLASH
+app.use(flash());
+
+//PASSPORT USER
+
+passport.use(new LocalStrategy({
+  passReqToCallback: true
+},(req,username, password, next) => {
+  User.findOne({ username }, (err, user) => {
+    if (err) {
+      return next(err);
+    }
+    if (!user) {
+      return next(null, false, { errorMessage: "Incorrect username" });
+    }
+    if (!bcrypt.compareSync(password, user.password)) {
+      return next(null, false, { errorMessage: "Incorrect password" });
+    }
+
+    return next(null, user);
+  });
+}));
+
+
+//PASSPORT INIT
+app.use(passport.initialize()); 
+app.use(passport.session());
+
+//ROUTES
 const index = require('./routes/index.routes');
 app.use('/', index);
 const authRoutes = require('./routes/auth.routes');
